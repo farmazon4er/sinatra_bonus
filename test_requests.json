@@ -1,0 +1,67 @@
+{
+	"info": {
+		"_postman_id": "646b4d64-bba9-49c8-9c10-8d1645953ea6",
+		"name": "Test requests",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "/operation",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"user_id\": 1,\n    \"positions\":[\n        {\n            \"id\": 1,\n            \"price\": 100,\n            \"quantity\": 3\n        },\n        {\n            \"id\": 2,\n            \"price\": 50,\n            \"quantity\": 2\n        },\n        {\n            \"id\": 3,\n            \"price\": 40,\n            \"quantity\": 1\n        },\n        {\n            \"id\": 4,\n            \"price\": 150,\n            \"quantity\": 2\n        }\n    ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://api.asgk-group.ru/operation",
+					"protocol": "https",
+					"host": [
+						"api",
+						"asgk-group",
+						"ru"
+					],
+					"path": [
+						"operation"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/submit",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{    \n    \"user\": {\n        \"id\": 1,\n        \"template_id\": 1,\n        \"name\": \"Иван\",\n        \"bonus\": \"10000.0\"\n    },\n    \"operation_id\": 18,\n    \"write_off\": 150\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://api.asgk-group.ru/submit",
+					"protocol": "https",
+					"host": [
+						"api",
+						"asgk-group",
+						"ru"
+					],
+					"path": [
+						"submit"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
