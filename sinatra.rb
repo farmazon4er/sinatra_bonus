@@ -5,6 +5,8 @@ require 'json'
 require 'pry'
 require 'pry-nav'
 
+require_relative 'product_helper'
+
 DB = Sequel.connect('sqlite://test.db')
 
 class User < Sequel::Model
@@ -18,6 +20,12 @@ class User < Sequel::Model
   def discount?
     template.name == 'Gold' || template.name == 'Silver'
   end
+
+  def user_responce
+    responce = to_hash
+    responce[:bonus] = responce[:bonus].to_f
+    responce
+  end
 end
 
 class Template < Sequel::Model
@@ -26,13 +34,13 @@ end
 
 class Product < Sequel::Model
   DESCRIPTION = {
-    increased_cashback: 'Дополнительный кэшбек 10%',
-    discount: "Дополнительная скидка 15%",
-    noloyalty:'Не участвует в системе лояльности',
+    'increased_cashback': 'Дополнительный кэшбек 10%',
+    'discount': "Дополнительная скидка 15%",
+    'noloyalty':'Не участвует в системе лояльности',
 }.freeze
 
   def description
-    DESCRIPTION[type.to_sym]
+    DESCRIPTION[type]
   end
 end
 
@@ -60,55 +68,40 @@ post '/operation' do
             will_add: 0.0
         }
   summ = 0.0
-  discount_summ = 0.0
+  discount = { summ: 0.0 }
 
   positions.each do |position|
     product = Product.first(id: position[:id])
-    position[:type] = product&.type
-    position[:value] = product&.value
-    position[:type_desc] = product&.description
-    position[:discount_percent] = product&.value.to_f
     position_summ = position[:price] * position[:quantity]
 
-    if product&.type == 'discount'
-      position[:discount_percent] = product.value.to_f
-      position[:discount_summ] = position_summ * (product.value.to_f / 100)
-    elsif user.discount? && product&.type != 'noloyalty'
-      position[:discount_percent] = user.template.discount.to_f
-      position[:discount_summ] = position_summ * (user.template.discount.to_f / 100)
-    else
-      position[:discount_percent] = 0.0
-      position[:discount_summ] = 0.0
-    end
+    product_to_position(position, product)
+    product_discount(position, position_summ, product, user)
+    product_cashback(position, position_summ, product, user, cashback)
 
-    if product&.type == 'increased_cashback'
-      cashback[:will_add] += (position_summ - position[:discount_summ]) * (product.value.to_f / 100)
-    end
-    if user.cashback? && product&.type != 'noloyalty'
-      cashback[:will_add] += (position_summ - position[:discount_summ]) * (user.template.cashback.to_f / 100)
-    end
-
-    if product&.type != 'noloyalty'
-      cashback[:allowed_summ] += (position_summ - position[:discount_summ])
-    end
-
-    discount_summ += position[:discount_summ]
-    summ += position[:price] * position[:quantity]
+    discount[:summ] += position[:discount_summ]
+    summ += position_summ
   end
 
-  discount = {
-    summ: discount_summ,
-    value: (discount_summ/summ * 100).round(2).to_s + '%' 
-  }
+  discount[:value] = to_percent(discount[:summ] / summ)
+  cashback[:value] = to_percent(cashback[:will_add] / summ)
+  summ -= discount[:summ]
+  
+  allowed_write_off = user.bonus > cashback[:allowed_summ] ? cashback[:allowed_summ] : user.bonus
+  operation = Operation.create(
+    user_id: user.id, 
+    cashback: cashback[:will_add], 
+    cashback_percent: cashback[:value],
+    discount: discount[:summ], 
+    discount_percent:discount[:value], 
+    write_off: cashback[:allowed_summ],
+    check_summ: summ,
+    done: false,
+    allowed_write_off: )
 
-  cashback[:value] = (cashback[:will_add] * 100 / summ).round(2).to_s + '%' 
-
-  summ -= discount_summ
-  user_responce = user.to_hash
-  user_responce[:bonus] = user_responce[:bonus].to_f
   responce = {
     status: 200,
-    user: user.to_hash,
+    user: user.user_responce,
+    operation_id: operation.id,
     summ:,
     positions:,
     discount:,
