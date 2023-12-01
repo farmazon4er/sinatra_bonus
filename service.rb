@@ -40,8 +40,7 @@ module Service
   def operation_transaction(user, operation, write_off)
     DB.transaction do
       write_off = user.bonus if (user.bonus - write_off).negative?
-      user.bonus -= write_off
-      user.bonus += operation.cashback
+      user.bonus = user.bonus - write_off +operation.cashback
       user.save
 
       operation.check_summ -= write_off
