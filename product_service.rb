@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 def product_to_position(position, product)
   position[:type] = product&.type
   position[:value] = product&.value
@@ -6,11 +8,10 @@ def product_to_position(position, product)
 end
 
 def product_discount(position, position_summ, product, user)
-  case
-  when product&.type == 'discount'
+  if product&.type == 'discount'
     position[:discount_percent] = product.value.to_f
     position[:discount_summ] = position_summ * (product.value.to_f / 100)
-  when user.discount? && product&.type != 'noloyalty'
+  elsif user.discount? && product&.type != 'noloyalty'
     position[:discount_percent] = user.template.discount.to_f
     position[:discount_summ] = position_summ * (user.template.discount.to_f / 100)
   else
@@ -26,11 +27,11 @@ def product_cashback(position, position_summ, product, user, cashback)
   if user.cashback? && product&.type != 'noloyalty'
     cashback[:will_add] += (position_summ - position[:discount_summ]) * (user.template.cashback.to_f / 100)
   end
-  if product&.type != 'noloyalty'
-    cashback[:allowed_summ] += (position_summ - position[:discount_summ])
-  end
+  return unless product&.type != 'noloyalty'
+
+  cashback[:allowed_summ] += (position_summ - position[:discount_summ])
 end
 
 def to_percent(value)
-  (value * 100).round(2).to_s + '%'
+  "#{(value * 100).round(2)}%"
 end

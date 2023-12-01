@@ -1,0 +1,63 @@
+{
+  "status": 200,
+  "user": {
+      "id": 1,
+      "template_id": 1,
+      "name": "Иван",
+      "bonus": "9370.0"
+  },
+  "operation_id": 29,
+  "summ": 734.0,
+  "positions": [
+      {
+          "id": 1,
+          "price": 100,
+          "quantity": 3,
+          "type": null,
+          "value": null,
+          "type_desc": null,
+          "discount_percent": 0.0,
+          "discount_summ": 0.0
+      },
+      {
+          "id": 2,
+          "price": 50,
+          "quantity": 2,
+          "type": "increased_cashback",
+          "value": "10",
+          "type_desc": "Дополнительный кэшбек 10%",
+          "discount_percent": 0.0,
+          "discount_summ": 0.0
+      },
+      {
+          "id": 3,
+          "price": 40,
+          "quantity": 1,
+          "type": "discount",
+          "value": "15",
+          "type_desc": "Дополнительная скидка 15%",
+          "discount_percent": 15.0,
+          "discount_summ": 6.0
+      },
+      {
+          "id": 4,
+          "price": 150,
+          "quantity": 2,
+          "type": "noloyalty",
+          "value": null,
+          "type_desc": "Не участвует в системе лояльности",
+          "discount_percent": 0.0,
+          "discount_summ": 0.0
+      }
+  ],
+  "discount": {
+      "summ": 6.0,
+      "value": "0.81%"
+  },
+  "cashback": {
+      "existed_summ": 9370,
+      "allowed_summ": 434.0,
+      "value": "4.19%",
+      "will_add": 31
+  }
+}
