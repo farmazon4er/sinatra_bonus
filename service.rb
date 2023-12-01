@@ -41,6 +41,7 @@ module Service
     DB.transaction do
       write_off = user.bonus if (user.bonus - write_off).negative?
       user.bonus -= write_off
+      user.bonus += operation.cashback
       user.save
 
       operation.check_summ -= write_off
