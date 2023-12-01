@@ -122,12 +122,11 @@ end
 post '/submit' do
   user = User.first(id: params[:user][:id])
   return 'Пользователь не найден' if user.nil?
-  
+
   operation = Operation.first(id:params[:operation_id])
   return 'Операция не найдена' if operation.nil?
   return 'Пользователю не принадлежит эта операция' if operation.user_id != params[:user][:id]
   return 'Операция уже выполнена' if operation.done
-
 
   if operation.allowed_write_off >= params[:write_off] 
     operation_transaction(user, operation, params[:write_off])
