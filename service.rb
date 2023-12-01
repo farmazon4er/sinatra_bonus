@@ -38,7 +38,7 @@ end
 
 def operation_transaction(user, operation, write_off)
   DB.transaction do
-    write_off = user.bonus if user.bonus - write_off < 0
+    write_off = user.bonus if (user.bonus - write_off).negative?
     user.bonus -= write_off
     operation.check_summ -= write_off
     operation.done = true
@@ -47,4 +47,3 @@ def operation_transaction(user, operation, write_off)
     operation.save
   end
 end
-

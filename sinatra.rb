@@ -4,8 +4,6 @@ require 'sinatra'
 require 'sequel'
 require 'sqlite3'
 require 'json'
-require 'pry'
-require 'pry-nav'
 
 require_relative 'service'
 
@@ -63,7 +61,7 @@ end
 before do
   content_type :json
 
-  if request.request_method == "POST" and request.content_type=="application/json"
+  if request.request_method == 'POST' and request.content_type=='application/json'
     body_parameters = request.body.read
     parsed = body_parameters && body_parameters.length >= 2 ? JSON.parse(body_parameters) : nil
     params.merge!(parsed)
