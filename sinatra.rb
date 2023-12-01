@@ -5,6 +5,8 @@ require 'json'
 require 'pry'
 require 'pry-nav'
 
+require_relative 'product_service'
+
 DB = Sequel.connect('sqlite://test.db')
 
 class User < Sequel::Model
@@ -18,6 +20,12 @@ class User < Sequel::Model
   def discount?
     template.name == 'Gold' || template.name == 'Silver'
   end
+
+  def responce
+    responce = to_hash
+    responce[:bonus] = responce[:bonus].to_f
+    responce
+  end
 end
 
 class Template < Sequel::Model
@@ -26,18 +34,28 @@ end
 
 class Product < Sequel::Model
   DESCRIPTION = {
-    increased_cashback: 'Дополнительный кэшбек 10%',
-    discount: "Дополнительная скидка 15%",
-    noloyalty:'Не участвует в системе лояльности',
+    'increased_cashback': 'Дополнительный кэшбек 10%',
+    'discount': "Дополнительная скидка 15%",
+    'noloyalty':'Не участвует в системе лояльности',
 }.freeze
 
   def description
-    DESCRIPTION[type.to_sym]
+    DESCRIPTION[type]
   end
 end
 
 class Operation < Sequel::Model
   many_to_one :user
+
+  def responce
+    responce = to_hash
+    responce[:cashback] = responce[:cashback].to_f
+    responce[:discount] = responce[:discount].to_f
+    responce[:write_off] = responce[:write_off].to_f
+    responce[:check_summ] = responce[:check_summ].to_f
+    responce[:allowed_write_off] = responce[:allowed_write_off].to_f
+    responce
+  end
 end
 
 before do
@@ -52,134 +70,86 @@ end
 
 post '/operation' do
   user = User.first(id: params[:user_id])
-
   positions = params[:positions]
+  products = Product.where(id: positions.map{|p| p[:id]})
+
   cashback = {
             existed_summ: user.bonus.to_f,
             allowed_summ: 0.0,
             will_add: 0.0
         }
   summ = 0.0
-  discount_summ = 0.0
+  discount = { summ: 0.0 }
 
   positions.each do |position|
-    product = Product.first(id: position[:id])
-    position[:type] = product&.type
-    position[:value] = product&.value
-    position[:type_desc] = product&.description
-    position[:discount_percent] = product&.value.to_f
+    product = products[position[:id]]
     position_summ = position[:price] * position[:quantity]
 
-    if product&.type == 'discount'
-      position[:discount_percent] = product.value.to_f
-      position[:discount_summ] = position_summ * (product.value.to_f / 100)
-    elsif user.discount? && product&.type != 'noloyalty'
-      position[:discount_percent] = user.template.discount.to_f
-      position[:discount_summ] = position_summ * (user.template.discount.to_f / 100)
-    else
-      position[:discount_percent] = 0.0
-      position[:discount_summ] = 0.0
-    end
+    product_to_position(position, product)
+    product_discount(position, position_summ, product, user)
+    product_cashback(position, position_summ, product, user, cashback)
 
-    if product&.type == 'increased_cashback'
-      cashback[:will_add] += (position_summ - position[:discount_summ]) * (product.value.to_f / 100)
-    end
-    if user.cashback? && product&.type != 'noloyalty'
-      cashback[:will_add] += (position_summ - position[:discount_summ]) * (user.template.cashback.to_f / 100)
-    end
-
-    if product&.type != 'noloyalty'
-      cashback[:allowed_summ] += (position_summ - position[:discount_summ])
-    end
-
-    discount_summ += position[:discount_summ]
-    summ += position[:price] * position[:quantity]
+    discount[:summ] += position[:discount_summ]
+    summ += position_summ
   end
 
-  discount = {
-    summ: discount_summ,
-    value: (discount_summ/summ * 100).round(2).to_s + '%' 
-  }
+  discount[:value] = to_percent(discount[:summ] / summ)
+  cashback[:value] = to_percent(cashback[:will_add] / summ)
+  summ -= discount[:summ]
 
-  cashback[:value] = (cashback[:will_add] * 100 / summ).round(2).to_s + '%' 
+  allowed_write_off = user.bonus > cashback[:allowed_summ] ? cashback[:allowed_summ] : user.bonus
 
-  summ -= discount_summ
-  user_responce = user.to_hash
-  user_responce[:bonus] = user_responce[:bonus].to_f
-  responce = {
+  operation = Operation.create(
+    user_id: user.id, 
+    cashback: cashback[:will_add], 
+    cashback_percent: cashback[:value],
+    discount: discount[:summ], 
+    discount_percent:discount[:value], 
+    write_off: cashback[:allowed_summ],
+    check_summ: summ,
+    done: false,
+    allowed_write_off:)
+
+  {
     status: 200,
-    user: user.to_hash,
+    user: user.responce,
+    operation_id: operation.id,
     summ:,
     positions:,
     discount:,
     cashback:,
-}.to_json
+  }.to_json
 end
 
-get '/test/:id' do
-  puts params[:id]
+post '/submit' do
+  operation = Operation.first(id:params[:operation_id])
+  return 'Операция уже выполнена' if operation&.done
+  return 'Операция не найдена' if operation.nil?
+
+  user = User.first(id: params[:user][:id])
+
+  if operation.allowed_write_off >= params[:write_off]
+    operation_transaction(user, operation, params[:write_off])
+    message = 'Операция успешно выполнена'
+  else
+    operation_transaction(user, operation, operation.allowed_write_off)
+    message = 'Списаны все доступные бонуснные баллы. Операция успешно выполнена'
+  end
+
+  {
+    status: 200,
+    message:,
+    operation: operation.responce
+  }.to_json
+  
 end
 
-# a = {
-#     "status": 200,
-#     "user": {
-#         "id": 1,
-#         "template_id": 1,
-#         "name": "Иван",
-#         "bonus": "9370.0"
-#     },
-#     "operation_id": 29,
-#     "summ": 734.0,
-#     "positions": [
-#         {
-#             "id": 1,
-#             "price": 100,
-#             "quantity": 3,
-#             "type": null,
-#             "value": null,
-#             "type_desc": null,
-#             "discount_percent": 0.0,
-#             "discount_summ": 0.0
-#         },
-#         {
-#             "id": 2,
-#             "price": 50,
-#             "quantity": 2,
-#             "type": "increased_cashback",
-#             "value": "10",
-#             "type_desc": "Дополнительный кэшбек 10%",
-#             "discount_percent": 0.0,
-#             "discount_summ": 0.0
-#         },
-#         {
-#             "id": 3,
-#             "price": 40,
-#             "quantity": 1,
-#             "type": "discount",
-#             "value": "15",
-#             "type_desc": "Дополнительная скидка 15%",
-#             "discount_percent": 15.0,
-#             "discount_summ": 6.0
-#         },
-#         {
-#             "id": 4,
-#             "price": 150,
-#             "quantity": 2,
-#             "type": "noloyalty",
-#             "value": null,
-#             "type_desc": "Не участвует в системе лояльности",
-#             "discount_percent": 0.0,
-#             "discount_summ": 0.0
-#         }
-#     ],
-#     "discount": {
-#         "summ": 6.0,
-#         "value": "0.81%"
-#     },
-#     "cashback": {
-#         "existed_summ": 9370,
-#         "allowed_summ": 434.0,
-#         "value": "4.19%",
-#         "will_add": 31
-#     }
-# }
+def operation_transaction(user, operation, write_off)
+  DB.transaction do
+    user.bonus -= write_off
+    operation.check_summ -= write_off
+    operation.done = true
+    user.save
+    operation.save
+  end
+end
