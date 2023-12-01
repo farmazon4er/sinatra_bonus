@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'sinatra'
 require 'sequel'
 require 'sqlite3'
@@ -5,7 +7,7 @@ require 'json'
 require 'pry'
 require 'pry-nav'
 
-require_relative 'product_service'
+require_relative 'service'
 
 DB = Sequel.connect('sqlite://test.db')
 
@@ -35,7 +37,7 @@ end
 class Product < Sequel::Model
   DESCRIPTION = {
     'increased_cashback': 'Дополнительный кэшбек 10%',
-    'discount': "Дополнительная скидка 15%",
+    'discount': 'Дополнительная скидка 15%',
     'noloyalty':'Не участвует в системе лояльности',
 }.freeze
 
@@ -105,7 +107,6 @@ post '/operation' do
     cashback_percent: cashback[:value],
     discount: discount[:summ], 
     discount_percent:discount[:value], 
-    write_off: cashback[:allowed_summ],
     check_summ: summ,
     done: false,
     allowed_write_off:)
@@ -125,31 +126,18 @@ post '/submit' do
   operation = Operation.first(id:params[:operation_id])
   return 'Операция уже выполнена' if operation&.done
   return 'Операция не найдена' if operation.nil?
-
+  return 'Пользователю не принадлежит эта операция' if operation.user_id != params[:user][:id]
   user = User.first(id: params[:user][:id])
 
-  if operation.allowed_write_off >= params[:write_off]
+  if operation.allowed_write_off >= params[:write_off] 
     operation_transaction(user, operation, params[:write_off])
-    message = 'Операция успешно выполнена'
   else
     operation_transaction(user, operation, operation.allowed_write_off)
-    message = 'Списаны все доступные бонуснные баллы. Операция успешно выполнена'
   end
 
   {
     status: 200,
-    message:,
+    message:'Операция успешно выполнена',
     operation: operation.responce
   }.to_json
-  
-end
-
-def operation_transaction(user, operation, write_off)
-  DB.transaction do
-    user.bonus -= write_off
-    operation.check_summ -= write_off
-    operation.done = true
-    user.save
-    operation.save
-  end
 end
