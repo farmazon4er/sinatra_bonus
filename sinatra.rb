@@ -6,6 +6,7 @@ require 'sqlite3'
 require 'json'
 
 require_relative 'service'
+helpers Service
 
 DB = Sequel.connect('sqlite://test.db')
 
@@ -21,7 +22,7 @@ class User < Sequel::Model
     template.name == 'Gold' || template.name == 'Silver'
   end
 
-  def responce
+  def to_responce
     responce = to_hash
     responce[:bonus] = responce[:bonus].to_f
     responce
@@ -37,7 +38,7 @@ class Product < Sequel::Model
     'increased_cashback': 'Дополнительный кэшбек 10%',
     'discount': 'Дополнительная скидка 15%',
     'noloyalty':'Не участвует в системе лояльности',
-}.freeze
+  }.freeze
 
   def description
     DESCRIPTION[type]
@@ -47,13 +48,9 @@ end
 class Operation < Sequel::Model
   many_to_one :user
 
-  def responce
+  def to_responce
     responce = to_hash
-    responce[:cashback] = responce[:cashback].to_f
-    responce[:discount] = responce[:discount].to_f
-    responce[:write_off] = responce[:write_off].to_f
-    responce[:check_summ] = responce[:check_summ].to_f
-    responce[:allowed_write_off] = responce[:allowed_write_off].to_f
+    responce.each_pair {|key, value| responce[key] = value.to_f if value.class == BigDecimal}
     responce
   end
 end
@@ -73,7 +70,7 @@ post '/operation' do
   return 'Пользователь не найден' if user.nil?
 
   positions = params[:positions]
-  products = Product.where(id: positions.map{|p| p[:id]})
+  products = Product.where(id: positions.map{ |p| p[:id]} )
 
   cashback = {
             existed_summ: user.bonus.to_f,
@@ -87,9 +84,9 @@ post '/operation' do
     product = products[position[:id]]
     position_summ = position[:price] * position[:quantity]
 
-    product_to_position(position, product)
-    product_discount(position, position_summ, product, user)
-    product_cashback(position, position_summ, product, user, cashback)
+    product_to_position(product, position)
+    product_discount(product, position, position_summ, user)
+    product_cashback(product, position, position_summ, user, cashback)
 
     discount[:summ] += position[:discount_summ]
     summ += position_summ
@@ -113,7 +110,7 @@ post '/operation' do
 
   {
     status: 200,
-    user: user.responce,
+    user: user.to_responce,
     operation_id: operation.id,
     summ:,
     positions:,
@@ -127,9 +124,9 @@ post '/submit' do
   return 'Пользователь не найден' if user.nil?
 
   operation = Operation.first(id:params[:operation_id])
-  return 'Операция уже выполнена' if operation&.done
   return 'Операция не найдена' if operation.nil?
   return 'Пользователю не принадлежит эта операция' if operation.user_id != params[:user][:id]
+  return 'Операция уже выполнена' if operation.done
 
   if operation.allowed_write_off >= params[:write_off] 
     operation_transaction(user, operation, params[:write_off])
@@ -140,6 +137,6 @@ post '/submit' do
   {
     status: 200,
     message:'Операция успешно выполнена',
-    operation: operation.responce
+    operation: operation.to_responce
   }.to_json
 end
